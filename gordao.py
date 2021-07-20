@@ -1,7 +1,6 @@
 from itertools import combinations
 from multiprocessing import Pool
 from tinydb import TinyDB, Query
-from colorama import Fore, Style
 import random
 import os
 import sys
@@ -48,12 +47,7 @@ def quads_para_dezenas(cartoes, dezenas_fixas):
     return results
 
 def jogo():  # sourcery no-metrics
-    quad_selecionados = []
-    dezenas_fixas = []
-    max_quad_linha = {}
-    max_quad_coluna = {}
-    dezena_fixa_ok = False
-    while not dezena_fixa_ok:
+    while 1:
         quad_selecionados = [int(i) for i in str.split(str(input('\nQuadrantes fixos (ex: 1,2,25): ')), ',') if int(i) < 26 and int(i) != 0]
         quad_exclusos = [int(i) for i in str.split(str(input('Quadrantes exclusos (ex: 1,2,25): ')), ',') if int(i) < 26 and int(i) != 0]
         dezenas_fixas = [int(i) for i in str.split(str(input('Duas dezenas fixas (ex: 0,10): ')), ',') if int(i) < 100]
@@ -65,19 +59,17 @@ def jogo():  # sourcery no-metrics
         elif (len(quad_exclusos) > 0 and set(quad_exclusos).issubset(set(quad_selecionados))):
             print('Quadrantes fixos não podem ser exclusos, tente novamente')
         else:
-            dezena_fixa_ok = True
-            for i in range(1, 6):
-                k = int(input('Quadrantes linha ' + str(i) + ': '))
-                max_quad_linha[i] = k
-            for i in range(1, 6):
-                k = int(input('Quadrantes coluna ' + str(i) + ': '))
-                max_quad_coluna[i] = k
+            max_quad_linha = { i: int(input(f'Quadrantes linha {str(i)}: ')) for i in range(1, 6) }
+            max_quad_coluna = { i: int(input(f'Quadrantes coluna {str(i)}: ')) for i in range(1, 6) }
             filtro = combinations([i for i in range(1, 26) if i not in quad_selecionados + quad_exclusos
-            and all(j not in quadrantes[i - 1] for j in dezenas_fixas)], 12 - len(quad_selecionados), )
+            and all(j not in quadrantes[i-1] for j in dezenas_fixas)], 12-len(quad_selecionados), )
+            break
+
     print('\nCalculando cartoes...\n')
     with Pool(6) as p:
         cartoes = calcular_cartoes(filtro, quads_com_dezenas_fixas, quad_selecionados, max_quad_linha, max_quad_coluna)
     print(str(len(cartoes)) + ' cartoes gerados')
+
     if (len(cartoes) > 0):
         li = quads_para_dezenas(cartoes, dezenas_fixas)
         r = int(input('Quantos cartoes devem ser sorteados? '))
@@ -96,6 +88,7 @@ def jogo():  # sourcery no-metrics
                     'n': ', '.join(map(str, s))
                 })
             print('Bolão salvo!')
+
     input('\n---------Fim de execução---------\n')
 
 def imprimir_resultado(dataset):
@@ -113,32 +106,32 @@ def conferir_resultado(dataset):
         if len(r) == 20:
             break
         print('Valor informado não possui 20 dezenas! Tente novamente')
-    result = {}
-    for data in dataset:
-        listnums = [int(n.strip()) for n in str.split(data['n'].replace('\n', ','), ',') if n != '']
-        result[f'{dataset.index(data)}'] = sum(int(i) in listnums for i in r)
-    sort = {k: v for k, v in sorted(result.items(), key=lambda item: item[1])} 
+    # bruh moment
+    result = { str(dataset.index(data)): sum(int(i) in [int(n.strip()) for n in str.split(data['n'].replace('\n', ','), ',') if n != ''] for i in r) for data in dataset }
+    strbuilder = []
     print('\nResultados:')
     for k, v in result.items():
-        if (int(v) > 14 or int(v) == 0):
-            print(f'{k}: {Fore.GREEN}{v}{Style.RESET_ALL}', end="  ")
-        else:
-            print(f'{k}: {v}', end="  ")
-        if (int(list(result.keys()).index(k)) % 5 == 0 and int(list(result.keys()).index(k)) != 0):
-            print('')
+        strbuilder.append(f'{k:>2}: {v:>2}')
+        if len(strbuilder) == 5:
+            print("{:<8}  {:<8}  {:<8}  {:<8}  {:<8}".format(*strbuilder))
+            strbuilder.clear()
+
     counter = dict(collections.Counter(result.values()))
     print('\nContagem:')
     for k, v in sorted(counter.items(), key=lambda item: item[0]):
-        print (f'{str(k)} dezenas: {str(v)} cartoes')
+        print (f'{str(k):>2} dezenas -> {str(v)} cartoes')
 
 def consultar_banco():  # sourcery no-metrics
     from tabulate import tabulate
+
     db = TinyDB('db.json')
     jogos = db.table('jogos')
     ids = list({jogo['id'] for jogo in jogos.all()})
+
     print('| id |')
     for i in range(len(ids)):
-        print(f'| {Fore.CYAN}{i}{Style.RESET_ALL} : {ids[i]}')
+        print(f'| {i} : {ids[i]}')
+
     r = input()
     try:
         if (int(r)+1 > len(ids)):
@@ -147,6 +140,7 @@ def consultar_banco():  # sourcery no-metrics
     except:
         print('Utilize numeros para acessar os indices!')
         return
+
     dataset = jogos.search(Query()['id'] == ids[int(r)])
     for data in dataset:
         new = ''
@@ -155,28 +149,31 @@ def consultar_banco():  # sourcery no-metrics
             a[i] = a[i].strip()
             new += ','.join(a[i:]) if (i+10 > len(a)) else ','.join(a[i:i+10])+'\n'
         data['n'] = new
-    print(tabulate([x.values() for x in dataset], dataset[0].keys(), tablefmt='grid', stralign='right', showindex='always'))
-    r2 = input('Deseja imprimir este bolao? (s|n): ')
-    if (r2.lower() == 's'):
+        
+    table = tabulate([data.values() for data in dataset], dataset[0].keys(), tablefmt='grid', stralign='right', showindex='always')
+    print(table)
+
+    if (input('Deseja imprimir este bolao? (s|n): ').lower() == 's'):
         imprimir_resultado(dataset)
-    r3 = input('Deseja conferir resultado? (s|n): ')
-    if (r3.lower() == 's'):
+    if (input('Deseja conferir resultado? (s|n): ').lower() == 's'):
         conferir_resultado(dataset)
+
     input('\n---------Fim de execução---------\n')
 
-def executar_acao(arg):
+def main():
+    print('Selecione uma opção:')
     switcher = {
         1: jogo,
         2: consultar_banco
     }
-    switcher[arg]()
-
-def main():
-    print('Selecione a opção do que deseja fazer:')
-    executar_acao(int(input(f'| {Fore.CYAN}1{Style.RESET_ALL}- Gerar jogo | {Fore.CYAN}2{Style.RESET_ALL}- Consultar banco de dados |\n')))
+    arg = int(input('| 1- Gerar jogo | 2- Consultar banco de dados |\n'))
+    if arg in switcher:
+        switcher[arg]()
+    else:
+        print('Opcao invalida!')
         
 if __name__ == '__main__':
-    print('\n\n----1-------2----Gordao-----4-------5----')
+    print('\n----1-------2----Gordao-----4-------5----')
     print('| 01 02 | 03 04 | 05 06 | 07 08 | 09 10 |')
     print('| 11 12 | 13 14 | 15 16 | 17 18 | 19 20 |')
     print('----6-------7-------8-------9-------10---')
