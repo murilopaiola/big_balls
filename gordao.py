@@ -5,6 +5,8 @@ from colorama import Fore, Style
 import random
 import os
 import sys
+import functools, collections, operator
+from time import sleep
 
 quadrantes = [
     ( 1,  2, 11, 12), ( 3,  4, 13, 14), ( 5,  6, 15, 16), ( 7,  8, 17, 18), ( 9, 10, 19, 20), 
@@ -22,29 +24,17 @@ def calcular_cartoes(filtro, quads_com_dezenas_fixas, quad_selecionados, max_qua
         quad_por_linha = {1:0, 2:0, 3:0, 4:0, 5:0}
         quad_por_coluna = {1:0, 2:0, 3:0, 4:0, 5:0}
         comb_com_fixos = list(comb) + quad_selecionados
-        mapping = [{[0, 5] : 1, [5, 10] : 2, [10, 15] : 3, [15,20] : 4, [20, 25] : 5}, 
-                   {[1, 6, 11, 16, 21] : 1, [2, 7, 12, 17, 22] : 2, [3, 8, 13, 18, 23] : 3, [4, 9, 14, 19, 24] : 4, [5, 10, 15, 20, 25] : 5}]
+        mapping = [{5 : 1, 10 : 2, 15 : 3, 20 : 4, 25 : 5}, 
+                   {(1, 6, 11, 16, 21) : 1, (2, 7, 12, 17, 22) : 2, (3, 8, 13, 18, 23) : 3, (4, 9, 14, 19, 24) : 4, (5, 10, 15, 20, 25) : 5}]
         for i in comb_com_fixos:
-            if i <= 5:
-                quad_por_linha[1] += 1
-            elif i <= 10:
-                quad_por_linha[2] += 1
-            elif i <= 15:
-                quad_por_linha[3] += 1
-            elif i <= 20:
-                quad_por_linha[4] += 1
-            elif i <= 25:
-                quad_por_linha[5] += 1
-            if i in [1, 6, 11, 16, 21]:
-                quad_por_coluna[1] += 1
-            elif i in [2, 7, 12, 17, 22]:
-                quad_por_coluna[2] += 1
-            elif i in [3, 8, 13, 18, 23]:
-                quad_por_coluna[3] += 1
-            elif i in [4, 9, 14, 19, 24]:
-                quad_por_coluna[4] += 1
-            elif i in [5, 10, 15, 20, 25]:
-                quad_por_coluna[5] += 1
+            for k in mapping[0]:
+                if i <= k:
+                    quad_por_linha[mapping[0][k]] += 1
+                    break
+            for k in mapping[1]:
+                if i in k:
+                    quad_por_coluna[mapping[1][k]] += 1
+                    break
         e = any((quad_por_coluna[i] > max_quad_coluna[i]) or (quad_por_linha[i] > max_quad_linha[i]) for i in range(1, 6))
         if not e:
             filtro2.append(sorted(comb_com_fixos))
@@ -90,15 +80,8 @@ def jogo():  # sourcery no-metrics
     print(str(len(cartoes)) + ' cartoes gerados')
     if (len(cartoes) > 0):
         li = quads_para_dezenas(cartoes, dezenas_fixas)
-        r = str(input('Deseja ver todos resultados? (s|n): '))
-        if r.lower() == 's':
-            for i in li:
-                print(i)
-        else:
-            r = int(input('Quantos cartoes devem ser sorteados? '))
-            sample = random.sample(li, r)
-            for i in sample:
-                print(i)
+        r = int(input('Quantos cartoes devem ser sorteados? '))
+        sample = random.sample(li, r)
         r = str(input('Deseja salvar os cartoes? (s|n): '))
         if r.lower() == 's':
             db = TinyDB('db.json')
@@ -115,7 +98,40 @@ def jogo():  # sourcery no-metrics
             print('Bolão salvo!')
     input('\n---------Fim de execução---------\n')
 
-def consultar_banco():
+def imprimir_resultado(dataset):
+    print('Gerando arquivo ...')
+    name = dataset[0]['id']
+    sleep(1)
+    with open(f'{name}.txt', 'w') as f:
+        for data in dataset:
+            f.write(data['n'].replace('\n', ', ') + '\n')
+    print('Arquivo de bolao gerado!\n')
+
+def conferir_resultado(dataset):
+    while 1:
+        r = str.split(input('Insira o resultado (ex: 1, 5, 8, 12...): '), ',')
+        if len(r) == 20:
+            break
+        print('Valor informado não possui 20 dezenas! Tente novamente')
+    result = {}
+    for data in dataset:
+        listnums = [int(n.strip()) for n in str.split(data['n'].replace('\n', ','), ',') if n != '']
+        result[f'{dataset.index(data)}'] = sum(int(i) in listnums for i in r)
+    sort = {k: v for k, v in sorted(result.items(), key=lambda item: item[1])} 
+    print('\nResultados:')
+    for k, v in result.items():
+        if (int(v) > 14 or int(v) == 0):
+            print(f'{k}: {Fore.GREEN}{v}{Style.RESET_ALL}', end="  ")
+        else:
+            print(f'{k}: {v}', end="  ")
+        if (int(list(result.keys()).index(k)) % 5 == 0 and int(list(result.keys()).index(k)) != 0):
+            print('')
+    counter = dict(collections.Counter(result.values()))
+    print('\nContagem:')
+    for k, v in sorted(counter.items(), key=lambda item: item[0]):
+        print (f'{str(k)} dezenas: {str(v)} cartoes')
+
+def consultar_banco():  # sourcery no-metrics
     from tabulate import tabulate
     db = TinyDB('db.json')
     jogos = db.table('jogos')
@@ -140,23 +156,13 @@ def consultar_banco():
             new += ','.join(a[i:]) if (i+10 > len(a)) else ','.join(a[i:i+10])+'\n'
         data['n'] = new
     print(tabulate([x.values() for x in dataset], dataset[0].keys(), tablefmt='grid', stralign='right', showindex='always'))
-    r = input('Deseja conferir resultado? (s|n): ')
-    if (r.lower() == 's'):
-        r = str.split(input('Insira o resultado (ex: 1, 5, 8, 12...): '), ',')
-        result = {}
-        for data in dataset:
-            listnums = [int(n.strip()) for n in str.split(data['n'].replace('\n', ','), ',') if n != '']
-            result[f'{dataset.index(data)}'] = sum(int(i) in listnums for i in r)
-        sort = {k: v for k, v in sorted(result.items(), key=lambda item: item[1])} 
-        print('\nResultados:')
-        for k, v in result.items():
-            if (int(v) > 15):
-                print(f'{k}: {Fore.GREEN}{v}{Style.RESET_ALL}', end="  ")
-            else:
-                print(f'{k}: {v}', end="  ")
-            if (int(list(result.keys()).index(k)) % 5 == 0 and int(list(result.keys()).index(k)) != 0):
-                print('')
-        input('\n---------Fim de execução---------\n')
+    r2 = input('Deseja imprimir este bolao? (s|n): ')
+    if (r2.lower() == 's'):
+        imprimir_resultado(dataset)
+    r3 = input('Deseja conferir resultado? (s|n): ')
+    if (r3.lower() == 's'):
+        conferir_resultado(dataset)
+    input('\n---------Fim de execução---------\n')
 
 def executar_acao(arg):
     switcher = {
