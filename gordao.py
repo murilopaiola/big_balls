@@ -1,10 +1,9 @@
 from itertools import combinations
-from multiprocessing import Pool
 from tinydb import TinyDB, Query
 import random
 import os
 import sys
-import functools, collections, operator
+import collections
 from time import sleep
 
 quadrantes = [
@@ -23,8 +22,8 @@ def calcular_cartoes(filtro, quads_com_dezenas_fixas, quad_selecionados, max_qua
         quad_por_linha = {1:0, 2:0, 3:0, 4:0, 5:0}
         quad_por_coluna = {1:0, 2:0, 3:0, 4:0, 5:0}
         comb_com_fixos = list(comb) + quad_selecionados
-        mapping = [{5 : 1, 10 : 2, 15 : 3, 20 : 4, 25 : 5}, 
-                   {(1, 6, 11, 16, 21) : 1, (2, 7, 12, 17, 22) : 2, (3, 8, 13, 18, 23) : 3, (4, 9, 14, 19, 24) : 4, (5, 10, 15, 20, 25) : 5}]
+        mapping = [{5:1, 10:2, 15:3, 20:4, 25:5}, 
+                   {(1, 6, 11, 16, 21):1, (2, 7, 12, 17, 22):2, (3, 8, 13, 18, 23):3, (4, 9, 14, 19, 24):4, (5, 10, 15, 20, 25):5}]
         for i in comb_com_fixos:
             for k in mapping[0]:
                 if i <= k:
@@ -66,16 +65,14 @@ def jogo():  # sourcery no-metrics
             break
 
     print('\nCalculando cartoes...\n')
-    with Pool(6) as p:
-        cartoes = calcular_cartoes(filtro, quads_com_dezenas_fixas, quad_selecionados, max_quad_linha, max_quad_coluna)
+    cartoes = calcular_cartoes(filtro, quads_com_dezenas_fixas, quad_selecionados, max_quad_linha, max_quad_coluna)
     print(str(len(cartoes)) + ' cartoes gerados')
 
     if (len(cartoes) > 0):
         li = quads_para_dezenas(cartoes, dezenas_fixas)
-        r = int(input('Quantos cartoes devem ser sorteados? '))
+        r = int(input('Quantos cartões devem ser sorteados? '))
         sample = random.sample(li, r)
-        r = str(input('Deseja salvar os cartoes? (s|n): '))
-        if r.lower() == 's':
+        if input('Deseja salvar os cartões? (s|n): ').lower() == 's':
             db = TinyDB('db.json')
             jogos = db.table('jogos')
             r = str(input('Nome do bolão: '))
@@ -119,7 +116,7 @@ def conferir_resultado(dataset):
     counter = dict(collections.Counter(result.values()))
     print('\nContagem:')
     for k, v in sorted(counter.items(), key=lambda item: item[0]):
-        print (f'{str(k):>2} dezenas -> {str(v)} cartoes')
+        print (f'{k:>2} dezenas -> {v} cartoes')
 
 def consultar_banco():  # sourcery no-metrics
     from tabulate import tabulate
@@ -138,7 +135,7 @@ def consultar_banco():  # sourcery no-metrics
             print('Índice fora de alcance!')
             return
     except:
-        print('Utilize numeros para acessar os indices!')
+        print('Utilize números para acessar os índices!')
         return
 
     dataset = jogos.search(Query()['id'] == ids[int(r)])
@@ -170,7 +167,7 @@ def main():
     if arg in switcher:
         switcher[arg]()
     else:
-        print('Opcao invalida!')
+        print('Opção inválida!')
         
 if __name__ == '__main__':
     print('\n----1-------2----Gordao-----4-------5----')
